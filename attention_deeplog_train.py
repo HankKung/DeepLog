@@ -1,6 +1,7 @@
 import time
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import TensorDataset, DataLoader
@@ -34,19 +35,19 @@ class Model(nn.Module):
         self.hidden_size = hidden_size
         self.num_layers = num_layers
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
-        self.attention = Attention(hidden_size)
         self.fc = nn.Linear(hidden_size, num_keys)
 
     def forward(self, x):
+
         h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(device)
         c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(device)
         out, (final_hidden_state, final_cell_state) = self.lstm(x, (h0, c0))
-        out = output.permute(1, 0, 2)
+        final_hidden_state = final_hidden_state[-1]
         out = self.attention_net(out, final_hidden_state)
-        out = self.fc(out[:, -1, :])
+        out = self.fc(out)
         return out
 
-def attention_net(self, lstm_output, final_state):
+    def attention_net(self, lstm_output, final_state):
 
         """ 
         Now we will incorporate Attention mechanism in our LSTM model. In this new model, we will use attention to compute soft alignment score corresponding
@@ -70,12 +71,10 @@ def attention_net(self, lstm_output, final_state):
                     new_hidden_state.size() = (batch_size, hidden_size)
                       
         """
-        
         hidden = final_state.squeeze(0)
         attn_weights = torch.bmm(lstm_output, hidden.unsqueeze(2)).squeeze(2)
         soft_attn_weights = F.softmax(attn_weights, 1)
         new_hidden_state = torch.bmm(lstm_output.transpose(1, 2), soft_attn_weights.unsqueeze(2)).squeeze(2)
-        
         return new_hidden_state
 
 
@@ -88,6 +87,7 @@ if __name__ == '__main__':
     input_size = 1
     model_dir = 'model'
     log = 'Adam_batch_size={}_epoch={}'.format(str(batch_size), str(num_epochs))
+    log = log + '_attention'
     parser = argparse.ArgumentParser()
     parser.add_argument('-num_layers', default=2, type=int)
     parser.add_argument('-hidden_size', default=64, type=int)
